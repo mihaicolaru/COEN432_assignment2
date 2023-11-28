@@ -1,3 +1,6 @@
+# project excludes
+A2_1500.txt
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
