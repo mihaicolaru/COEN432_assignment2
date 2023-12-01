@@ -24,7 +24,7 @@ target = []
 
 # parse file into usable data
 line_index = 0
-limit = 500
+limit = 100
 for line in lines:
     components = line.split(";")  
 
@@ -110,7 +110,7 @@ print("start testing")
 track_neighbors = []
 track_mean = []
 track_std_dev = []
-for i in range(10, 100, 5):
+for i in range(1, int(limit/2), 2):
     knn = KNeighborsRegressor(n_neighbors=i, algorithm='ball_tree')
 
     kf = KFold(n_splits=10, shuffle=True, random_state=42)
