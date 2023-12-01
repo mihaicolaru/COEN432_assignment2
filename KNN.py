@@ -6,18 +6,25 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.model_selection import KFold
 from sklearn.model_selection import cross_val_score
 
+import numpy as np
+
+import matplotlib.pyplot as plt
+
 
 # read training data from file     
 f = open("A2_15000.txt", "r")
 
 # read input file line by line
 lines = f.read().splitlines()
+f.close()
+del f
 
 input_features = []
 target = []
 
 # parse file into usable data
-lim = 0
+line_index = 0
+limit = 500
 for line in lines:
     components = line.split(";")  
 
@@ -43,7 +50,6 @@ for line in lines:
         individual_probs_matrix.append(individual_probs_list[i + j: i + 60])
         i += 60
         j += 1
-
     
     # extract gene position/probability pairs
     feature_set = []
@@ -74,38 +80,64 @@ for line in lines:
 
     input_features.append(feature_set)
 
-    lim += 1
-    if(lim >= 10):
+    line_index += 1
+    if(line_index >= limit):
         break
     # break
 
-# print(input_features)
 
+Y = np.array(target)
+del target
+del lines
 
+print("done parsing, flattening")
 
+x_flat = [np.reshape(instance, -1).astype(np.float32) for instance in input_features]
+del input_features
 
+print("done flattening, create array")
 
+X = np.array(x_flat)
+del x_flat
 
-# enc = OneHotEncoder(handle_unknown='ignore')
-
-# enc.fit(input_features)
-# fitted = enc.transform(input_features).toarray()
-
-
-
+print("start testing")
 
 # for i in range(1, 1000):
 #     clf = DecisionTreeRegressor(max_depth=i)
 #     scores = cross_val_score(clf, fitted, target, cv=10)
 #     print("%0.2f accuracy with a standard deviation of %0.2f" % (scores.mean(), scores.std()))
 
+track_neighbors = []
+track_mean = []
+track_std_dev = []
+for i in range(10, 100, 5):
+    knn = KNeighborsRegressor(n_neighbors=i, algorithm='ball_tree')
+
+    kf = KFold(n_splits=10, shuffle=True, random_state=42)
+
+    neg_scores = cross_val_score(knn, X, Y, cv=kf, scoring='neg_mean_squared_error')
+    scores = [abs(score) for score in neg_scores]
+    mean = abs(neg_scores.mean())
+    std_dev = abs(neg_scores.std())
+    track_neighbors.append(i)
+    track_mean.append(mean)
+    track_std_dev.append(std_dev)
+
+    print(f"neighbors: {i}, mean MSE: {mean}, mean std dev: {std_dev}\nscores: {scores}\n")
 
 
-knn = KNeighborsRegressor(n_neighbors=40)
+fig, ax1 = plt.subplots()
 
-kf = KFold(n_splits=10, shuffle=True, random_state=42)
+ax1.set_xlabel('neighbors')
+ax1.set_ylabel('mean MSE', color='tab:red')
+ax1.plot(track_neighbors, track_mean, color='tab:red')
+ax1.tick_params(axis='y', labelcolor='tab:red')
 
-scores = cross_val_score(knn, input_features, target, cv=kf, scoring='r2')
+ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+ax2.set_ylabel('std dev', color='tab:blue')  # we already handled the x-label with ax1
+ax2.plot(track_neighbors, track_std_dev, color='tab:blue')
+ax2.tick_params(axis='y', labelcolor='tab:blue')
 
-print(f"score: {scores}, mr2: {scores.mean()}")
-print("%0.2f accuracy with a standard deviation of %0.2f" % (scores.mean(), scores.std()))
+fig.suptitle(f"Samples used: {limit}")
+fig.tight_layout()  # otherwise the right y-label is slightly clipped
+fig.savefig('Ass2Lifetime.png')
