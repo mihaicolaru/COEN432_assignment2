@@ -1,22 +1,6 @@
-
-
-# # define instance class, holds training data unit
-# class instance:
-#     def __init__(self, number, sequence, pairing_probs, activation):        
-#         self.number = number
-#         self.sequence = sequence
-#         self.pairing_probs = pairing_probs
-#         self.activation = activation
-
-#     def __str__(self):
-#         return f"instance number: {self.number}\nsequence: {self.sequence}\npairing probability matrix: {str(self.pairing_probs)}\nactivation: {self.activation}"
-    
-#     def display(self):
-#         print("instance number:", self.number, "\nsequence:", self.sequence, "activation:", self.activation, "\n")
-
-
 from sklearn.tree import DecisionTreeRegressor
-
+from sklearn.model_selection import KFold
+from sklearn.model_selection import cross_val_score
 
 # read training data from file     
 f = open("A2_15000.txt", "r")
@@ -56,10 +40,19 @@ for line in lines:
 
     # nucleotide frequency (g)
     sequence = components[1]
+    num_a = 0
+    num_u = 0
     num_g = 0
+    num_c = 0
     for gene in sequence:
+        if(gene == "a"):
+            num_g += 1
+        if(gene == "u"):
+            num_c += 1
         if(gene == "g"):
             num_g += 1
+        if(gene == "c"):
+            num_c += 1
 
     # average pairing probability
     # number of pairs over threshold (0.1)
@@ -76,7 +69,7 @@ for line in lines:
     # print(f"count: {count}")
     average_prob = total_prob/count
 
-    input_features.append([num_pairs, total_prob])
+    input_features.append([num_g, total_prob])
     target.append(float(components[3]))
 
 
@@ -107,21 +100,46 @@ for line in lines:
     #     print(f"pair: {pairs[i]}\nprobability: {probabilities[i]}")
 
 
-X = input_features[0:500]
-Y = target[0:500]
-X_test = input_features[500:1000]
-
-regr_1 = DecisionTreeRegressor(max_depth=10)
-regr_2 = DecisionTreeRegressor(max_depth=20)
-
-regr_1.fit(X, Y)
-regr_2.fit(X, Y)
-
-Y1_pred = regr_1.predict(X_test)
-Y2_pred = regr_2.predict(X_test)
-
-Y_actual = target[500:1000]
 
 
-for i in range(0, len(X_test)):
-    print(f"predicted 1,2: {Y1_pred[i]}, {Y2_pred[i]}\nactual: {Y_actual[i]}")
+# depth = []
+# for i in range(3,20):
+#     clf = tree.DecisionTreeClassifier(max_depth=i)
+#     # Perform 7-fold cross validation 
+#     scores = cross_val_score(estimator=clf, X=x, y=y, cv=7, n_jobs=4)
+#     depth.append((i,scores.mean()))
+# print(depth)
+
+
+
+
+# kf = KFold(n_splits=10)
+# kf.get_n_splits(input_features)
+
+# for train, test in kf.split(input_features):
+#     print(f"train: {train}")
+#     print(f"test: {test}")
+
+for i in range(1, 1000):
+    clf = DecisionTreeRegressor(max_depth=i)
+    scores = cross_val_score(clf, input_features, target, cv=10)
+    print("%0.2f accuracy with a standard deviation of %0.2f" % (scores.mean(), scores.std()))
+
+# X = input_features[0:500]
+# Y = target[0:500]
+# X_test = input_features[500:1000]
+
+# regr_1 = DecisionTreeRegressor(max_depth=10)
+# regr_2 = DecisionTreeRegressor(max_depth=20)
+
+# regr_1.fit(X, Y)
+# regr_2.fit(X, Y)
+
+# Y1_pred = regr_1.predict(X_test)
+# Y2_pred = regr_2.predict(X_test)
+
+# Y_actual = target[500:1000]
+
+
+# for i in range(0, len(X_test)):
+#     print(f"predicted 1,2: {Y1_pred[i]}, {Y2_pred[i]}\nactual: {Y_actual[i]}")

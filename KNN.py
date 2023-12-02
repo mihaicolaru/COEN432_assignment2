@@ -1,30 +1,26 @@
 # KNN implementation
-from sklearn.tree import DecisionTreeRegressor
-
 from sklearn.neighbors import KNeighborsRegressor
-from sklearn.preprocessing import OneHotEncoder
 from sklearn.model_selection import KFold
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_val_score, cross_val_predict
 
 import numpy as np
 
 import matplotlib.pyplot as plt
 
-
+# ==================== read input file ====================
 # read training data from file     
 f = open("A2_15000.txt", "r")
 
 # read input file line by line
 lines = f.read().splitlines()
 f.close()
-del f
 
 input_features = []
 target = []
 
 # parse file into usable data
 line_index = 0
-limit = 100
+limit = 5000
 for line in lines:
     components = line.split(";")  
 
@@ -54,51 +50,30 @@ for line in lines:
     # extract gene position/probability pairs
     feature_set = []
     for i in range(0, 59):
-        pair_encode_i = []
-        # encode 1st gene position
-        for k in range(0, i):
-            pair_encode_i.append(0)
-        pair_encode_i.append(1)
-        # print(f"pair encode i: {pair_encode_i}, length: {len(pair_encode_i)}")
-        
+        jdx = i + 1
         for j in range(0, 60-(i+1)):
-            # encode 2nd gene position
-            pair_encode_j = []
-            for k in range(0, j):
-                pair_encode_j.append(0)
-            pair_encode_j .append(1)
-            # print(f"pair encode j: {pair_encode_j}, length: {len(pair_encode_j)}")
+            loc_prob_pair = [i, jdx, individual_probs_matrix[i][j]]
+            feature_set.append(loc_prob_pair)
+            jdx += 1
 
-            full_pair = pair_encode_i + pair_encode_j
-            for k in range(0, 60-len(full_pair)):
-                full_pair.append(0)
-            # print(f"pair encode full: {full_pair}, length: {len(full_pair)}")
-            
-            full_pair.append(individual_probs_matrix[i][j])
-            feature_set.append(full_pair)
-            # feature_set.append(individual_probs_matrix[i][j])
-
+    # add pos/prob pairs to input
     input_features.append(feature_set)
 
+    # check for number of lines reached
     line_index += 1
     if(line_index >= limit):
         break
-    # break
+    
 
-
-Y = np.array(target)
-del target
-del lines
-
-print("done parsing, flattening")
+print(f"done parsing {line_index} or {len(input_features)}, flattening input features")
 
 x_flat = [np.reshape(instance, -1).astype(np.float32) for instance in input_features]
-del input_features
 
-print("done flattening, create array")
+print("done flattening, creating feature/target arrays")
 
 X = np.array(x_flat)
-del x_flat
+Y = np.array(target)
+
 
 print("start testing")
 
@@ -107,25 +82,36 @@ print("start testing")
 #     scores = cross_val_score(clf, fitted, target, cv=10)
 #     print("%0.2f accuracy with a standard deviation of %0.2f" % (scores.mean(), scores.std()))
 
+# loop to find optimal number of neighbors
 track_neighbors = []
 track_mean = []
 track_std_dev = []
-for i in range(1, int(limit/2), 2):
-    knn = KNeighborsRegressor(n_neighbors=i, algorithm='ball_tree')
 
-    kf = KFold(n_splits=10, shuffle=True, random_state=42)
+# loop to find optimal number of neighbors for KNN
+try:
+    for i in range(1, int(limit/2), int(limit/100)):
+        # define KNN regressor parameters
+        knn = KNeighborsRegressor(n_neighbors=i, weights='distance', algorithm='ball_tree', n_jobs=1)
 
-    neg_scores = cross_val_score(knn, X, Y, cv=kf, scoring='neg_mean_squared_error')
-    scores = [abs(score) for score in neg_scores]
-    mean = abs(neg_scores.mean())
-    std_dev = abs(neg_scores.std())
-    track_neighbors.append(i)
-    track_mean.append(mean)
-    track_std_dev.append(std_dev)
+        # define K-fold cross validation parameters
+        kf = KFold(n_splits=10, shuffle=True, random_state=42)
 
-    print(f"neighbors: {i}, mean MSE: {mean}, mean std dev: {std_dev}\nscores: {scores}\n")
+        # K-fold KNN, extract scores (MSE), mean, standard deviation
+        neg_scores = cross_val_score(knn, X, Y, cv=kf, scoring='neg_mean_squared_error', n_jobs=-1)
+        scores = [abs(score) for score in neg_scores]
+        mean = abs(neg_scores.mean())
+        std_dev = abs(neg_scores.std())
+        track_neighbors.append(i)
+        track_mean.append(mean)
+        track_std_dev.append(std_dev)
+
+        print(f"neighbors: {i}, mean MSE (RSS/number of samples): {mean}, mean std dev: {std_dev}\nscores: {scores}\n")
+
+except KeyboardInterrupt:
+    print("ctrl+c pressed, printing plots...")
 
 
+# plot loop results
 fig, ax1 = plt.subplots()
 
 ax1.set_xlabel('neighbors')
@@ -140,4 +126,40 @@ ax2.tick_params(axis='y', labelcolor='tab:blue')
 
 fig.suptitle(f"Samples used: {limit}")
 fig.tight_layout()  # otherwise the right y-label is slightly clipped
-fig.savefig('Ass2Lifetime.png')
+fig.savefig(f'{limit} samples.png')
+
+
+# find best neighbor
+i = 0
+top_score = 1000
+top_neighbors = 0
+for score in track_mean:
+    if(score < top_score):
+        top_score = score
+        top_neighbors = track_neighbors[i]
+    i += 1
+
+print(f"top score: {top_score}, number of neighbors: {top_neighbors}\n")
+
+print(f"testing {top_neighbors} neighbors with k=10 K-fold cross validation:\n")
+
+# perform knn on the data once again at optimal neighbor
+knn = KNeighborsRegressor(n_neighbors=top_neighbors, weights='distance', algorithm='ball_tree')
+
+kf = KFold(n_splits=10, shuffle=True, random_state=42)
+
+# K-fold KNN, extract scores (MSE), mean, standard deviation and predictions
+neg_scores = cross_val_score(knn, X, Y, cv=kf, scoring='neg_mean_squared_error', n_jobs=-1)
+predictions = cross_val_predict(knn, X, Y, cv=kf, n_jobs=-1)
+scores = [abs(score) for score in neg_scores]
+mean = abs(neg_scores.mean())
+std_dev = abs(neg_scores.std())
+
+print(f"mean MSE (RSS/number of samples): {mean}, mean RSS = {limit * mean}, mean std dev: {std_dev}\nscores: {scores}\n")
+
+print(f"predictions:\n")
+
+i = 0
+for prediction in predictions:
+    print(f"prediction {i}: {prediction:0.6f}, actual {i}: {target[i]:0.6f}")
+    i += 1
